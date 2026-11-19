@@ -19,10 +19,12 @@ def create_app(config_name=None):
     db.init_app(app)
     migrate.init_app(app, db)
 
-    from .models import User
+    from .models import User  # noqa: F401
     from .routes import sessions_bp
+    from .routes.auth import auth_bp
     from .routes.health import health_bp
 
+    app.register_blueprint(auth_bp)
     app.register_blueprint(sessions_bp)
     app.register_blueprint(health_bp)
 
