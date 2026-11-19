@@ -19,6 +19,7 @@ def create_app(config_name=None):
     db.init_app(app)
     migrate.init_app(app, db)
 
+    from .models import User
     from .routes import sessions_bp
     from .routes.health import health_bp
 
