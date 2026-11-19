@@ -1,8 +1,9 @@
-from datetime import timezone
+from datetime import datetime, timedelta, timezone
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, current_app, jsonify, request
+import jwt
 from sqlalchemy import or_
-from werkzeug.security import generate_password_hash
+from werkzeug.security import check_password_hash, generate_password_hash
 
 from ..extensions import db
 from ..models import User
@@ -86,3 +87,63 @@ def register():
         ),
         201,
     )
+
+
+@auth_bp.route("/login", methods=["POST"])
+def login():
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return (
+            jsonify(
+                {
+                    "error": "Bad Request",
+                    "message": "username and password are required non-empty strings",
+                }
+            ),
+            400,
+        )
+
+    username = data.get("username")
+    password = data.get("password")
+
+    if (
+        not isinstance(username, str)
+        or not username.strip()
+        or not isinstance(password, str)
+        or len(password) == 0
+    ):
+        return (
+            jsonify(
+                {
+                    "error": "Bad Request",
+                    "message": "username and password are required non-empty strings",
+                }
+            ),
+            400,
+        )
+
+    user = User.query.filter_by(username=username.strip()).first()
+    if user is None or not check_password_hash(user.password_hash, password):
+        return (
+            jsonify(
+                {
+                    "error": "Unauthorized",
+                    "message": "Invalid credentials",
+                }
+            ),
+            401,
+        )
+
+    expires_minutes = current_app.config["JWT_ACCESS_TOKEN_EXPIRES_MINUTES"]
+    payload = {
+        "sub": str(user.id),
+        "role": user.role,
+        "exp": datetime.now(timezone.utc) + timedelta(minutes=expires_minutes),
+    }
+    token = jwt.encode(
+        payload,
+        current_app.config["JWT_SECRET_KEY"],
+        algorithm="HS256",
+    )
+
+    return jsonify({"token": token}), 200

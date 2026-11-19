@@ -1,36 +1,42 @@
 import os
+from pathlib import Path
+
 from dotenv import load_dotenv
 
-load_dotenv()
+BASE_DIR = Path(__file__).resolve().parent.parent
+INSTANCE_DIR = BASE_DIR / "instance"
+
+load_dotenv(BASE_DIR / ".env")
 
 
 class Config:
-    DEBUG = False
-    TESTING = False
+    SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-key")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    JWT_SECRET = os.getenv("JWT_SECRET")
+    JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "dev-jwt-secret-change-me")
+    JWT_ACCESS_TOKEN_EXPIRES_MINUTES = int(
+        os.environ.get("JWT_ACCESS_TOKEN_EXPIRES_MINUTES", "60")
+    )
 
 
 class DevelopmentConfig(Config):
     DEBUG = True
-    SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL") or "sqlite:///dev.db"
+    SQLALCHEMY_DATABASE_URI = os.environ.get(
+        "DATABASE_URL",
+        f"sqlite:///{INSTANCE_DIR / 'dev.db'}",
+    )
 
 
 class TestingConfig(Config):
     TESTING = True
-    SQLALCHEMY_DATABASE_URI = "sqlite:///test.db"
+    SQLALCHEMY_DATABASE_URI = os.environ.get(
+        "TEST_DATABASE_URL",
+        "sqlite:///:memory:",
+    )
 
 
 class ProductionConfig(Config):
-    SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL")
-    if not SQLALCHEMY_DATABASE_URI:
-        raise RuntimeError(
-            "DATABASE_URL is required in production but was not set."
-        )
-    if not Config.JWT_SECRET:
-        raise RuntimeError(
-            "JWT_SECRET is required in production but was not set."
-        )
+    DEBUG = False
+    SQLALCHEMY_DATABASE_URI = os.environ.get("DATABASE_URL")
 
 
 config_by_name = {
