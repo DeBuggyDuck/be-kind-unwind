@@ -353,3 +353,35 @@ def update_me():
         ),
         200,
     )
+
+
+@auth_bp.route("/admin/users", methods=["GET"])
+@token_required
+def list_users():
+    if g.current_role != "admin":
+        return (
+            jsonify(
+                {
+                    "error": "Forbidden",
+                    "message": "Admin access required",
+                }
+            ),
+            403,
+        )
+
+    users = db.session.execute(db.select(User).order_by(User.id)).scalars().all()
+    return (
+        jsonify(
+            [
+                {
+                    "id": user.id,
+                    "username": user.username,
+                    "email": user.email,
+                    "role": user.role,
+                    "created_at": user.created_at.isoformat(),
+                }
+                for user in users
+            ]
+        ),
+        200,
+    )
