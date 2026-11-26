@@ -1,8 +1,10 @@
 from flask import Flask
 
 from .config import config_by_name
+
 from .extensions import db, migrate
 
+from .models import MoodCheckSession, User  # noqa: F401
 
 def create_app(config_name=None):
     if config_name is None:
