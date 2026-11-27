@@ -1,0 +1,180 @@
+========================================================================
+Be Kind, Unwind - Unit 3 Sessions CRUD & Auth/AuthZ Verification Log
+Branch: unit-3-sessions-endpoints (verified against commit 914d5cd)
+Date: 2026-11-27
+========================================================================
+
+=== 1. Identity Logins ===
+
+# A. Owner login (bob_unwind_renamed -> sub="5", role="user")
+$ curl -i -X POST http://127.0.0.1:5001/login \
+  -H "Content-Type: application/json" \
+  -d '{"username": "bob_unwind_renamed", "password": "BobPassword123!"}'
+
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{"token":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1Iiwicm9sZSI6InVzZXIiLCJleHAiOjE3OTU3NjEwNTR9.IpdxZkRII302rwWufrCFWD5rOPcZ73vS3bzL0nv6G0Q"}
+
+# B. Non-owner login (alice_final -> sub="4", role="user")
+$ curl -i -X POST http://127.0.0.1:5001/login \
+  -H "Content-Type: application/json" \
+  -d '{"username": "alice_final", "password": "AlicePassword123!"}'
+
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{"token":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI0Iiwicm9sZSI6InVzZXIiLCJleHAiOjE3OTU3NjEwNTR9.gbSi9YJpjvj7UtvNoGLWWk_ss9NENwdggcnEwtOQd-0"}
+
+# C. Admin login (admin_unwind -> sub="6", role="admin")
+$ curl -i -X POST http://127.0.0.1:5001/login \
+  -H "Content-Type: application/json" \
+  -d '{"username": "admin_unwind", "password": "AdminPassword123!"}'
+
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{"token":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2Iiwicm9sZSI6ImFkbWluIiwiZXhwIjoxNzk1NzYxMDU1fQ.qOcDgp6DUz9mhMSNgF3vb9bq5MyDA89DS_2rQ5VAn70"}
+
+=== 2. Owner Create Session (POST /api/sessions) ===
+
+$ curl -i -X POST http://127.0.0.1:5001/api/sessions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $OWNER_TOKEN" \
+  -d '{
+    "mood": "stressed",
+    "attention_span": "short",
+    "time_commitment": 90,
+    "recommendation": "Spirited Away",
+    "notes": "Testing owner create path"
+  }'
+
+HTTP/1.1 201 CREATED
+Content-Type: application/json
+
+{"attention_span":"short","created_at":"2026-11-27T05:33:17.448803","id":28,"mood":"stressed","notes":"Testing owner create path","recommendation":"Spirited Away","time_commitment":90,"user_id":5}
+
+=== 3. Owner Paginated List (GET /api/sessions?page=1&per_page=10) ===
+
+$ curl -i -H "Authorization: Bearer $OWNER_TOKEN" \
+  "http://127.0.0.1:5001/api/sessions?page=1&per_page=10"
+
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{"items":[{"attention_span":"medium","created_at":"2026-11-27T04:56:59.915156","id":5,"mood":"cozy","notes":"Owned by User A","recommendation":"Kiki's Delivery Service","time_commitment":60,"user_id":5},{"attention_span":"medium","created_at":"2026-11-27T05:09:43.022732","id":6,"mood":"calm_1","notes":"Pagination seed 1","recommendation":"My Neighbor Totoro","time_commitment":30,"user_id":5},{"attention_span":"medium","created_at":"2026-11-27T05:09:43.040807","id":7,"mood":"calm_2","notes":"Pagination seed 2","recommendation":"My Neighbor Totoro","time_commitment":30,"user_id":5},{"attention_span":"medium","created_at":"2026-11-27T05:09:43.054776","id":8,"mood":"calm_3","notes":"Pagination seed 3","recommendation":"My Neighbor Totoro","time_commitment":30,"user_id":5},{"attention_span":"medium","created_at":"2026-11-27T05:09:43.070009","id":9,"mood":"calm_4","notes":"Pagination seed 4","recommendation":"My Neighbor Totoro","time_commitment":30,"user_id":5},{"attention_span":"medium","created_at":"2026-11-27T05:09:43.084616","id":10,"mood":"calm_5","notes":"Pagination seed 5","recommendation":"My Neighbor Totoro","time_commitment":30,"user_id":5},{"attention_span":"medium","created_at":"2026-11-27T05:09:43.099579","id":11,"mood":"calm_6","notes":"Pagination seed 6","recommendation":"My Neighbor Totoro","time_commitment":30,"user_id":5},{"attention_span":"medium","created_at":"2026-11-27T05:09:43.114297","id":12,"mood":"calm_7","notes":"Pagination seed 7","recommendation":"My Neighbor Totoro","time_commitment":30,"user_id":5},{"attention_span":"medium","created_at":"2026-11-27T05:09:43.128089","id":13,"mood":"calm_8","notes":"Pagination seed 8","recommendation":"My Neighbor Totoro","time_commitment":30,"user_id":5},{"attention_span":"medium","created_at":"2026-11-27T05:09:43.141969","id":14,"mood":"calm_9","notes":"Pagination seed 9","recommendation":"My Neighbor Totoro","time_commitment":30,"user_id":5}],"page":1,"pages":3,"per_page":10,"total":24}
+
+=== 4. Single-Session Read: Owner vs Non-Owner (GET /api/sessions/28) ===
+
+# A. Owner (bob_unwind_renamed -> 200 OK)
+$ curl -i -H "Authorization: Bearer $OWNER_TOKEN" \
+  http://127.0.0.1:5001/api/sessions/28
+
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{"attention_span":"short","created_at":"2026-11-27T05:33:17.448803","id":28,"mood":"stressed","notes":"Testing owner create path","recommendation":"Spirited Away","time_commitment":90,"user_id":5}
+
+# B. Non-owner (alice_final -> 404 Not Found masking authZ failure)
+$ curl -i -H "Authorization: Bearer $NON_OWNER_TOKEN" \
+  http://127.0.0.1:5001/api/sessions/28
+
+HTTP/1.1 404 NOT FOUND
+Content-Type: application/json
+
+{"error":"Not Found","message":"Session not found"}
+
+=== 5. Single-Session Update: Owner vs Non-Owner (PATCH /api/sessions/28) ===
+
+# A. Owner (bob_unwind_renamed -> 200 OK)
+$ curl -i -X PATCH http://127.0.0.1:5001/api/sessions/28 \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $OWNER_TOKEN" \
+  -d '{
+    "mood": "relieved",
+    "notes": "Updated by owner path check"
+  }'
+
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{"attention_span":"short","created_at":"2026-11-27T05:33:17.448803","id":28,"mood":"relieved","notes":"Updated by owner path check","recommendation":"Spirited Away","time_commitment":90,"user_id":5}
+
+# B. Non-owner (alice_final -> 404 Not Found masking authZ failure)
+$ curl -i -X PATCH http://127.0.0.1:5001/api/sessions/28 \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $NON_OWNER_TOKEN" \
+  -d '{
+    "mood": "hijacked",
+    "notes": "Cross-owner update attempt by Alice"
+  }'
+
+HTTP/1.1 404 NOT FOUND
+Content-Type: application/json
+
+{"error":"Not Found","message":"Session not found"}
+
+=== 6. Owner Delete & Missing-Resource Verification (DELETE /api/sessions/28) ===
+
+# A. Owner delete -> 204 No Content
+$ curl -i -X DELETE http://127.0.0.1:5001/api/sessions/28 \
+  -H "Authorization: Bearer $OWNER_TOKEN"
+
+HTTP/1.1 204 NO CONTENT
+
+# B. Owner repeat delete -> 404 Not Found
+$ curl -i -X DELETE http://127.0.0.1:5001/api/sessions/28 \
+  -H "Authorization: Bearer $OWNER_TOKEN"
+
+HTTP/1.1 404 NOT FOUND
+Content-Type: application/json
+
+{"error":"Not Found","message":"Session not found"}
+
+=== 7. Unauthenticated Perimeter Checks (GET /api/sessions/5) ===
+
+# A. Missing Authorization header -> 401 Unauthorized
+$ curl -i http://127.0.0.1:5001/api/sessions/5
+
+HTTP/1.1 401 UNAUTHORIZED
+Content-Type: application/json
+
+{"error":"Unauthorized","message":"Missing or invalid token"}
+
+# B. Garbage Bearer token -> 401 Unauthorized
+$ curl -i http://127.0.0.1:5001/api/sessions/5 \
+  -H "Authorization: Bearer whatever"
+
+HTTP/1.1 401 UNAUTHORIZED
+Content-Type: application/json
+
+{"error":"Unauthorized","message":"Missing or invalid token"}
+
+=== 8. Admin-Only Route Role Enforcement (GET /admin/users) ===
+
+# A. Regular user (alice_final -> 403 Forbidden)
+$ curl -i http://127.0.0.1:5001/admin/users \
+  -H "Authorization: Bearer $NON_OWNER_TOKEN"
+
+HTTP/1.1 403 FORBIDDEN
+Content-Type: application/json
+
+{"error":"Forbidden","message":"Admin access required"}
+
+# B. Regular user (bob_unwind_renamed -> 403 Forbidden)
+$ curl -i http://127.0.0.1:5001/admin/users \
+  -H "Authorization: Bearer $OWNER_TOKEN"
+
+HTTP/1.1 403 FORBIDDEN
+Content-Type: application/json
+
+{"error":"Forbidden","message":"Admin access required"}
+
+# C. Admin user (admin_unwind -> 200 OK)
+$ curl -i http://127.0.0.1:5001/admin/users \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+[{"created_at":"2026-11-19T03:34:39.422141","email":"alice@example.com","id":1,"role":"user","username":"alice"},{"created_at":"2026-11-20T03:35:35.392776","email":"tester@bekindunwind.local","id":2,"role":"user","username":"unwind_tester"},{"created_at":"2026-11-20T04:06:24.076351","email":"bob@example.com","id":3,"role":"user","username":"bob"},{"created_at":"2026-11-20T04:08:10.621063","email":"alice_final@example.com","id":4,"role":"user","username":"alice_final"},{"created_at":"2026-11-20T04:08:10.691585","email":"bob_renamed@example.com","id":5,"role":"user","username":"bob_unwind_renamed"},{"created_at":"2026-11-20T04:52:46.411024","email":"admin@example.com","id":6,"role":"admin","username":"admin_unwind"},{"created_at":"2026-11-20T05:30:30.986157","email":"audit_throwaway@example.com","id":7,"role":"user","username":"audit_throwaway"},{"created_at":"2026-11-26T06:47:21.511504","email":"rel_demo@bekindunwind.local","id":8,"role":"user","username":"rel_demo_user"},{"created_at":"2026-11-26T07:05:26.115482","email":"session_b@bekindunwind.local","id":9,"role":"user","username":"session_user_b"}]
