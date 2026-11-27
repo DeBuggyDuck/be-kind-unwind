@@ -10,17 +10,17 @@ class User(db.Model):
     username = db.Column(db.String(80), unique=True, nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
-    role = db.Column(
-        db.String(32),
-        nullable=False,
-        default="user",
-        server_default="user",
-    )
+    role = db.Column(db.String(20), nullable=False, default="user")
     created_at = db.Column(
         db.DateTime(timezone=True),
-        nullable=False,
         default=lambda: datetime.now(timezone.utc),
+        nullable=False,
     )
+
+    mood_check_sessions = db.relationship(
+        "MoodCheckSession", back_populates="user"
+    )
+
 
 class MoodCheckSession(db.Model):
     __tablename__ = "mood_check_sessions"
@@ -37,3 +37,5 @@ class MoodCheckSession(db.Model):
         default=lambda: datetime.now(timezone.utc),
         nullable=False,
     )
+
+    user = db.relationship("User", back_populates="mood_check_sessions")
