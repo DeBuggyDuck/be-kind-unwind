@@ -87,16 +87,77 @@ def validate_session_payload(data, partial=False):
 @sessions_bp.route("", methods=["GET"])
 @token_required
 def list_sessions():
+    raw_page = request.args.get("page", "1")
+    raw_per_page = request.args.get("per_page", "10")
+
+    try:
+        page = int(raw_page)
+        per_page = int(raw_per_page)
+    except (TypeError, ValueError):
+        return (
+            jsonify(
+                {
+                    "error": "Bad Request",
+                    "message": "page and per_page must be positive integers",
+                }
+            ),
+            400,
+        )
+
+    if page < 1 or per_page < 1:
+        return (
+            jsonify(
+                {
+                    "error": "Bad Request",
+                    "message": "page and per_page must be positive integers",
+                }
+            ),
+            400,
+        )
+
+    if per_page > 50:
+        return (
+            jsonify(
+                {
+                    "error": "Bad Request",
+                    "message": "per_page cannot exceed 50",
+                }
+            ),
+            400,
+        )
+
+    base_query = db.select(MoodCheckSession).where(
+        MoodCheckSession.user_id == g.current_user_id
+    )
+
+    total = db.session.scalar(
+        db.select(db.func.count()).select_from(base_query.subquery())
+    )
+    pages = (total + per_page - 1) // per_page if total > 0 else 0
+
+    offset = (page - 1) * per_page
     sessions = (
         db.session.execute(
-            db.select(MoodCheckSession)
-            .where(MoodCheckSession.user_id == g.current_user_id)
-            .order_by(MoodCheckSession.id.asc())
+            base_query.order_by(MoodCheckSession.id.asc())
+            .limit(per_page)
+            .offset(offset)
         )
         .scalars()
         .all()
     )
-    return jsonify([session_to_dict(s) for s in sessions]), 200
+
+    return (
+        jsonify(
+            {
+                "items": [session_to_dict(s) for s in sessions],
+                "page": page,
+                "per_page": per_page,
+                "total": total,
+                "pages": pages,
+            }
+        ),
+        200,
+    )
 
 
 @sessions_bp.route("", methods=["POST"])
