@@ -28,27 +28,39 @@ def session_to_dict(session):
     }
 
 
+def get_owned_session(session_id):
+    session = db.session.get(MoodCheckSession, session_id)
+    if session is None or session.user_id != g.current_user_id:
+        return None
+    return session
+
+
 def validate_session_payload(data, partial=False):
     if not isinstance(data, dict):
-        return "Request body must be valid JSON"
+        return {"_schema": "Request body must be valid JSON"}
+
+    errors = {}
 
     if "user_id" in data:
-        return "user_id cannot be supplied in the request body"
+        errors["user_id"] = "user_id cannot be supplied in the request body"
 
-    unknown_fields = set(data.keys()) - UPDATABLE_SESSION_FIELDS
+    unknown_fields = sorted(set(data.keys()) - UPDATABLE_SESSION_FIELDS - {"user_id"})
     if unknown_fields:
-        return "Cannot modify restricted or unknown fields"
+        errors["_schema"] = (
+            f"Cannot modify restricted or unknown fields: {', '.join(unknown_fields)}"
+        )
 
     if partial and not data:
-        return "At least one updatable field must be provided"
+        errors["_schema"] = "At least one updatable field must be provided"
 
     for field in ("mood", "attention_span", "recommendation"):
         if not partial or field in data:
             value = data.get(field)
             if not isinstance(value, str) or not value.strip():
                 if partial:
-                    return f"{field} must be a non-empty string"
-                return f"{field} is required and must be a non-empty string"
+                    errors[field] = f"{field} must be a non-empty string"
+                else:
+                    errors[field] = f"{field} is required and must be a non-empty string"
 
     if not partial or "time_commitment" in data:
         time_commitment = data.get("time_commitment")
@@ -58,15 +70,18 @@ def validate_session_payload(data, partial=False):
             or time_commitment <= 0
         ):
             if partial:
-                return "time_commitment must be a positive integer"
-            return "time_commitment is required and must be a positive integer"
+                errors["time_commitment"] = "time_commitment must be a positive integer"
+            else:
+                errors["time_commitment"] = (
+                    "time_commitment is required and must be a positive integer"
+                )
 
     if "notes" in data:
         notes = data.get("notes")
         if notes is not None and not isinstance(notes, str):
-            return "notes must be a string or null"
+            errors["notes"] = "notes must be a string or null"
 
-    return None
+    return errors or None
 
 
 @sessions_bp.route("", methods=["GET"])
@@ -88,13 +103,14 @@ def list_sessions():
 @token_required
 def create_session():
     data = request.get_json(silent=True)
-    error_message = validate_session_payload(data, partial=False)
-    if error_message:
+    errors = validate_session_payload(data, partial=False)
+    if errors:
         return (
             jsonify(
                 {
                     "error": "Bad Request",
-                    "message": error_message,
+                    "message": "Validation failed",
+                    "details": errors,
                 }
             ),
             400,
@@ -123,7 +139,7 @@ def create_session():
 @sessions_bp.route("/<int:session_id>", methods=["GET"])
 @token_required
 def get_session(session_id):
-    session = db.session.get(MoodCheckSession, session_id)
+    session = get_owned_session(session_id)
     if session is None:
         return (
             jsonify(
@@ -142,19 +158,20 @@ def get_session(session_id):
 @token_required
 def update_session(session_id):
     data = request.get_json(silent=True)
-    error_message = validate_session_payload(data, partial=True)
-    if error_message:
+    errors = validate_session_payload(data, partial=True)
+    if errors:
         return (
             jsonify(
                 {
                     "error": "Bad Request",
-                    "message": error_message,
+                    "message": "Validation failed",
+                    "details": errors,
                 }
             ),
             400,
         )
 
-    session = db.session.get(MoodCheckSession, session_id)
+    session = get_owned_session(session_id)
     if session is None:
         return (
             jsonify(
@@ -188,7 +205,7 @@ def update_session(session_id):
 @sessions_bp.route("/<int:session_id>", methods=["DELETE"])
 @token_required
 def delete_session(session_id):
-    session = db.session.get(MoodCheckSession, session_id)
+    session = get_owned_session(session_id)
     if session is None:
         return (
             jsonify(
