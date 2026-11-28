@@ -1,0 +1,30 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-unwind_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-unwind_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-be_kind_unwind}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-unwind_user} -d ${POSTGRES_DB:-be_kind_unwind}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      FLASK_ENV: ${FLASK_ENV:-development}
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      PORT: 8000
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
