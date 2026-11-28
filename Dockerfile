@@ -11,4 +11,4 @@ COPY . .
 
 EXPOSE 8000
 
-CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:${PORT} wsgi:app"]
+CMD ["sh", "-c", "flask --app wsgi db upgrade && gunicorn --bind 0.0.0.0:${PORT} wsgi:app"]
